@@ -5,18 +5,20 @@ namespace AirPainter.Core
     /// <summary>
     /// Adaptive low-pass filter (1€ Filter) for noisy signals.
     /// Eliminates jitter at low speeds and reduces lag at high speeds.
+    /// Implemented as struct to avoid GC allocations per stroke.
     /// </summary>
-    public class OneEuroFilter
+    public struct OneEuroFilter
     {
         private float minCutoff;
         private float beta;
         private float dCutoff;
         private float deadzone; // Sub-pixel threshold to ignore jitter
 
-        private Vector3? xPrev;
+        private bool hasPrev;
+        private Vector3 xPrev;
         private Vector3 dxPrev;
         private float tPrev;
-        private Vector3? lastOutput;
+        private Vector3 lastOutput;
 
         public OneEuroFilter(float minCutoff = 1.0f, float beta = 0.0f, float dCutoff = 1.0f, float deadzone = 0.002f)
         {
@@ -24,25 +26,32 @@ namespace AirPainter.Core
             this.beta = beta;
             this.dCutoff = dCutoff;
             this.deadzone = deadzone;
+            this.hasPrev = false;
+            this.xPrev = Vector3.zero;
+            this.dxPrev = Vector3.zero;
+            this.tPrev = 0f;
+            this.lastOutput = Vector3.zero;
         }
 
         public Vector3 Filter(Vector3 x, float t)
         {
-            if (xPrev == null)
+            if (!hasPrev)
             {
+                hasPrev = true;
                 xPrev = x;
                 dxPrev = Vector3.zero;
                 tPrev = t;
+                lastOutput = x;
                 return x;
             }
 
             float te = t - tPrev;
 
             // The data might come in instantly or out of order
-            if (te <= 0f) return xPrev.Value;
+            if (te <= 0f) return xPrev;
 
             // Calculate velocity
-            Vector3 dx = (x - xPrev.Value) / te;
+            Vector3 dx = (x - xPrev) / te;
             
             // Filter velocity
             float ad = SmoothingFactor(te, dCutoff);
@@ -53,21 +62,14 @@ namespace AirPainter.Core
 
             // Filter position
             float ae = SmoothingFactor(te, cutoff);
-            Vector3 xFiltered = Vector3.Lerp(xPrev.Value, x, ae);
+            Vector3 xFiltered = Vector3.Lerp(xPrev, x, ae);
             
             // Apply Dead-zone (Anti-jitter)
-            if (lastOutput == null) 
+            float dist = Vector3.Distance(lastOutput, xFiltered);
+            if (dist > deadzone)
             {
-                lastOutput = xFiltered;
-            }
-            else
-            {
-                float dist = Vector3.Distance(lastOutput.Value, xFiltered);
-                if (dist > deadzone)
-                {
-                    // Interpolate slightly out of deadzone to prevent snapping
-                    lastOutput = Vector3.Lerp(lastOutput.Value, xFiltered, 0.8f);
-                }
+                // Interpolate slightly out of deadzone to prevent snapping
+                lastOutput = Vector3.Lerp(lastOutput, xFiltered, 0.8f);
             }
 
             // Update states
@@ -75,14 +77,13 @@ namespace AirPainter.Core
             dxPrev = dxFiltered;
             tPrev = t;
 
-            return lastOutput.Value;
+            return lastOutput;
         }
 
         public void Reset()
         {
-            xPrev = null;
+            hasPrev = false;
             dxPrev = Vector3.zero;
-            lastOutput = null;
         }
 
         private float SmoothingFactor(float te, float cutoff)

@@ -16,6 +16,14 @@ namespace AirPainter.Rendering
         {
             meshFilter = GetComponent<MeshFilter>();
             meshRenderer = GetComponent<MeshRenderer>();
+            
+            // Create a dedicated mesh instance for this renderer that will be reused
+            if (meshFilter.sharedMesh == null)
+            {
+                Mesh newMesh = new Mesh();
+                newMesh.MarkDynamic(); // Optimize for frequent vertex updates
+                meshFilter.sharedMesh = newMesh;
+            }
         }
 
         /// <summary>
@@ -26,10 +34,10 @@ namespace AirPainter.Rendering
             CurrentStroke = stroke;
             meshRenderer.material = material;
             
-            // Clean up old mesh if being reused from pool
+            // Clear the existing mesh geometry but keep the Mesh object
             if (meshFilter.sharedMesh != null)
             {
-                Destroy(meshFilter.sharedMesh);
+                meshFilter.sharedMesh.Clear();
             }
         }
 
@@ -40,14 +48,16 @@ namespace AirPainter.Rendering
         {
             if (CurrentStroke == null || CurrentStroke.Points.Count < 2) return;
 
-            Mesh newMesh = MeshBuilder.GenerateStrokeMesh(CurrentStroke.Points);
-            
-            if (meshFilter.sharedMesh != null)
+            Mesh mesh = meshFilter.sharedMesh;
+            if (mesh == null)
             {
-                Destroy(meshFilter.sharedMesh); // Prevent memory leak on redraw
+                mesh = new Mesh();
+                mesh.MarkDynamic();
+                meshFilter.sharedMesh = mesh;
             }
-            
-            meshFilter.sharedMesh = newMesh;
+
+            // Zero-allocation mesh update
+            MeshBuilder.UpdateStrokeMesh(CurrentStroke.Points, mesh);
         }
 
         /// <summary>
@@ -58,14 +68,17 @@ namespace AirPainter.Rendering
             CurrentStroke = null;
             if (meshFilter.sharedMesh != null)
             {
-                Destroy(meshFilter.sharedMesh);
-                meshFilter.sharedMesh = null;
+                meshFilter.sharedMesh.Clear();
             }
         }
         
         private void OnDestroy()
         {
-            Clear();
+            // Only destroy the mesh when the GameObject itself is destroyed
+            if (meshFilter != null && meshFilter.sharedMesh != null)
+            {
+                Destroy(meshFilter.sharedMesh);
+            }
         }
     }
 }

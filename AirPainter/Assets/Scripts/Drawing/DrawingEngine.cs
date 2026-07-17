@@ -8,7 +8,7 @@ namespace AirPainter.Drawing
 {
     /// <summary>
     /// Core engine that manages the active drawing session.
-    /// Handles sampling raw inputs, filtering, generating splines, and triggering mesh updates.
+    /// Optimized for zero GC allocation during drawing frames.
     /// </summary>
     public class DrawingEngine : MonoBehaviour
     {
@@ -24,9 +24,7 @@ namespace AirPainter.Drawing
         private Stroke activeStroke;
         private StrokeRenderer activeRenderer;
         
-        private OneEuroFilter filterX;
-        private OneEuroFilter filterY;
-        private OneEuroFilter filterZ;
+        private OneEuroFilter positionFilter;
         
         private MotionPredictor predictor;
         private BrushPhysics physicsEngine;
@@ -51,10 +49,8 @@ namespace AirPainter.Drawing
             activeRenderer = renderer;
             activeRenderer.Initialize(activeStroke, currentMaterial);
 
-            // Initialize Math & Physics
-            filterX = new OneEuroFilter(filterMinCutoff, filterBeta);
-            filterY = new OneEuroFilter(filterMinCutoff, filterBeta);
-            filterZ = new OneEuroFilter(filterMinCutoff, filterBeta);
+            // Initialize Structs
+            positionFilter = new OneEuroFilter(filterMinCutoff, filterBeta);
             
             predictor = new MotionPredictor(predictionFrames);
             physicsEngine = new BrushPhysics(startPosition);
@@ -74,11 +70,7 @@ namespace AirPainter.Drawing
             float time = Time.time;
 
             // 1. 1€ Filtering (Removes jitter and micro-shakes)
-            Vector3 filteredPosition = new Vector3(
-                filterX.Filter(currentPosition.x, time),
-                filterY.Filter(currentPosition.y, time),
-                filterZ.Filter(currentPosition.z, time)
-            );
+            Vector3 filteredPosition = positionFilter.Filter(currentPosition, time);
 
             // 2. Motion Prediction (Reduces latency)
             Vector3 predictedPosition = predictor.Predict(filteredPosition, time);
@@ -89,14 +81,15 @@ namespace AirPainter.Drawing
             // 4. Spatial Filtering on the physical brush position
             Vector3 lastPos = activeStroke.Points.Count > 0 ? activeStroke.Points[activeStroke.Points.Count - 1].Position : physicalPosition;
             float minDistanceSq = pointMinDistance * pointMinDistance;
-            if (!PointFilter.ShouldKeepPoint(physicalPosition, lastPos, minDistanceSq))
+            
+            // Optimized distance check to avoid square root
+            if ((physicalPosition - lastPos).sqrMagnitude < minDistanceSq)
                 return;
 
             // 5. Velocity and Pressure Calculation
             float velocityMagnitude = physicsEngine.GetVelocity().magnitude;
             
-            // Pressure Simulation (slower = thicker/more pressure, faster = thinner/less pressure)
-            // Adjust threshold based on scale of your world
+            // Pressure Simulation
             float targetPressure = Mathf.Clamp01(1f - (velocityMagnitude / 10.0f));
             currentPressure = Mathf.Lerp(currentPressure, targetPressure, 10f * deltaTime); 
 
@@ -116,9 +109,6 @@ namespace AirPainter.Drawing
 
             Stroke finishedStroke = activeStroke;
             
-            // Optional: Run Douglas-Peucker simplification here for optimization before finalizing.
-            // However, we want to maintain the smooth Spline look, so we leave it as is for now.
-
             activeStroke = null;
             activeRenderer = null;
             
