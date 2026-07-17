@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AirPainter Web Prototype</title>
+    <!-- MediaPipe Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Hidden video element to feed the camera to MediaPipe -->
+      <video class="input_video" style="display: none;"></video>
+      
+      <!-- Canvas to draw the video and the user's artwork -->
+      <canvas class="output_canvas"></canvas>
+
+      <!-- UI Overlay -->
+      <div class="ui-panel">
+        <h1>AirPainter Pro</h1>
+        <div style="display: flex; justify-content: space-between;">
+          <span id="fps-counter" style="color: #0f0; font-family: monospace;">FPS: 0</span>
+          <span id="status-text" style="color: #ff0; font-family: monospace;">Mode: Draw</span>
+        </div>
+        <p style="font-size: 12px; margin-bottom: 5px;">Pinch to draw. Peace to erase.<br>Thumb Up=Undo, Down=Redo.</p>
+        <button id="clear-btn">Clear Canvas (Or use 4 Fingers)</button>
+        <div class="colors">
+          <button class="color-btn" style="background: red;" data-color="red"></button>
+          <button class="color-btn" style="background: blue;" data-color="blue"></button>
+          <button class="color-btn" style="background: green;" data-color="green"></button>
+          <button class="color-btn" style="background: yellow;" data-color="yellow"></button>
+          <button class="color-btn" style="background: white;" data-color="white"></button>
+          <button class="color-btn" style="background: repeating-linear-gradient(45deg, #ccc, #ccc 5px, #fff 5px, #fff 10px);" data-color="eraser" title="Eraser"></button>
+        </div>
+        <label for="size-slider" style="margin-top: 10px;">Brush/Eraser Size:</label>
+        <input type="range" id="size-slider" min="2" max="50" value="10">
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
